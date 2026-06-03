@@ -5,3 +5,5 @@ thumbs/
 # System & editor cruft
 .DS_Store
 node_modules/
+
+docs/.obsidian/
