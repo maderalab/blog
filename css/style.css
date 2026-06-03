@@ -32,6 +32,15 @@ body {
 /* ---------- Layout ---------- */
 .app { max-width: var(--maxw); margin: 0 auto; padding: 3.2rem 1.6rem 4rem; min-height: 50vh; }
 .loading { text-align: center; color: var(--ink-soft); font-style: italic; padding: 4rem 0; }
+.loading::before {
+  content: ""; display: block; width: 2.2rem; height: 2.2rem; margin: 0 auto 1rem;
+  border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading::before { animation-duration: 2.4s; }
+}
 
 .block { margin-bottom: 3rem; }
 

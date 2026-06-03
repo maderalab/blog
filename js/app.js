@@ -1,4 +1,4 @@
-// 拾光集 — a small hash-routed SPA.
+// A small hash-routed SPA.
 //   #/                              home: collection + album cards
 //   #/collection/<collection>       an article collection's list
 //   #/article/<collection>/<slug>   the markdown viewer
@@ -25,7 +25,7 @@ const esc = (s) =>
 async function loadManifest() {
   if (MANIFEST) return MANIFEST;
   const res = await fetch("content.json", { cache: "no-cache" });
-  if (!res.ok) throw new Error("无法读取 content.json，请先运行 `node build.mjs` 生成内容索引。");
+  if (!res.ok) throw new Error("Could not load content.json. Run `node build.mjs` first to generate the content index.");
   MANIFEST = await res.json();
   return MANIFEST;
 }
@@ -71,21 +71,20 @@ function renderHome(m) {
     )
     .join("");
 
-  const sections = [];
-  if (collections) sections.push(`<section class="block"><div class="grid">${collections}</div></section>`);
-  if (albums) sections.push(`<section class="block"><div class="grid">${albums}</div></section>`);
-  app.innerHTML =
-    sections.join("") || `<p class="empty">还没有内容，往 docs/ 里建个文件夹放点东西吧。</p>`;
+  const cards = collections + albums;
+  app.innerHTML = cards
+    ? `<section class="block"><div class="grid">${cards}</div></section>`
+    : `<p class="empty">Nothing here yet. Add a folder under docs/ to get started.</p>`;
 }
 
 function renderCollection(m, name) {
   const c = m.collections.find((x) => x.name === name);
   if (!c) {
-    app.innerHTML = `<p class="error">找不到这个合集。</p>`;
+    app.innerHTML = `<p class="error">Collection not found.</p>`;
     return;
   }
   app.innerHTML = `
-    <a class="back-link" href="#/" aria-label="返回首页">←</a>
+    <a class="back-link" href="#/" aria-label="Back to home">←</a>
     <div class="collection">
       <div class="collection-head"><h3>${esc(c.name)}</h3><span class="count">${countLabel("article", c.count)}</span></div>
       <ul class="post-list">
@@ -103,15 +102,15 @@ async function renderArticle(m, collName, slug) {
   const coll = m.collections.find((c) => c.name === collName);
   const art = coll && coll.articles.find((a) => a.slug === slug);
   if (!art) {
-    app.innerHTML = `<p class="error">找不到这篇文章。</p>`;
+    app.innerHTML = `<p class="error">Article not found.</p>`;
     return;
   }
-  app.innerHTML = `<div class="article"><p class="loading">正在展开字句…</p></div>`;
+  app.innerHTML = `<div class="article"><p class="loading"></p></div>`;
 
   const path = `docs/${encodeURIComponent(collName)}/${encodeURIComponent(art.file)}`;
   const res = await fetch(path, { cache: "no-cache" });
   if (!res.ok) {
-    app.innerHTML = `<p class="error">无法读取文章文件：${esc(path)}</p>`;
+    app.innerHTML = `<p class="error">Could not load article file: ${esc(path)}</p>`;
     return;
   }
   let raw = await res.text();
@@ -128,7 +127,7 @@ async function renderArticle(m, collName, slug) {
 
   app.innerHTML = `
     <article class="article">
-      <a class="back-link" href="#/collection/${encodeURIComponent(collName)}" aria-label="返回${esc(collName)}">←</a>
+      <a class="back-link" href="#/collection/${encodeURIComponent(collName)}" aria-label="Back to ${esc(collName)}">←</a>
       <header class="article-header">
         <h1>${esc(art.title)}</h1>
         <p class="meta">${esc(collName)} · ${esc(art.date)}</p>
@@ -140,11 +139,11 @@ async function renderArticle(m, collName, slug) {
 function renderAlbum(m, albumName) {
   const album = m.albums.find((a) => a.name === albumName);
   if (!album) {
-    app.innerHTML = `<p class="error">找不到这个相册。</p>`;
+    app.innerHTML = `<p class="error">Album not found.</p>`;
     return;
   }
   app.innerHTML = `
-    <a class="back-link" href="#/" aria-label="返回首页">←</a>
+    <a class="back-link" href="#/" aria-label="Back to home">←</a>
     <header class="album-header"><h1>${esc(albumName)}</h1><p class="meta">${countLabel("photo", album.count)}</p></header>
     <div class="gallery">
       ${album.images
