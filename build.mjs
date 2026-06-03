@@ -11,11 +11,39 @@
 //
 // Run it whenever you add or rename content:  node build.mjs
 
-import { readdir, readFile, writeFile, stat } from "node:fs/promises";
+import { readdir, readFile, writeFile, stat, mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
+import sharp from "sharp";
 
-const ROOT = path.dirname(new URL(import.meta.url).pathname);
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const IMG_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg"]);
+
+// Thumbnails: raster images get a small webp; vector/animated stay as-is.
+const THUMB_DIR = "thumbs";
+const THUMB_MAX = 800;
+const NO_THUMB = new Set([".svg", ".gif"]);
+
+// Make a thumbnail for docs/<folder>/<file> and return { full, thumb } as
+// root-relative URL paths. On anything unexpected, thumb falls back to full.
+async function makeImage(folder, file) {
+  const full = `docs/${folder}/${file}`;
+  const ext = path.extname(file).toLowerCase();
+  if (NO_THUMB.has(ext)) return { full, thumb: full };
+
+  const base = file.slice(0, -ext.length);
+  const relThumb = `${THUMB_DIR}/${folder}/${base}.webp`;
+  try {
+    await mkdir(path.join(ROOT, THUMB_DIR, folder), { recursive: true });
+    await sharp(path.join(ROOT, "docs", folder, file))
+      .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 72 })
+      .toFile(path.join(ROOT, relThumb));
+    return { full, thumb: relThumb };
+  } catch {
+    return { full, thumb: full };
+  }
+}
 
 async function listDirs(dir) {
   try {
@@ -113,7 +141,8 @@ async function buildArticles() {
     }
     articles.sort((a, b) => (a.date < b.date ? 1 : -1));
     if (articles.length) {
-      collections.push({ name: dir.name, count: articles.length, cover, articles });
+      const coverImg = cover ? await makeImage(dir.name, cover) : null;
+      collections.push({ name: dir.name, count: articles.length, cover: coverImg, articles });
     }
   }
   return collections;
@@ -128,7 +157,9 @@ async function buildAlbums() {
     if (hasMarkdown) continue;
     const files = (await listFiles(albumPath, (n) => IMG_EXT.has(path.extname(n).toLowerCase()))).sort();
     if (files.length) {
-      albums.push({ name: dir.name, count: files.length, cover: files[0], images: files });
+      const images = [];
+      for (const file of files) images.push(await makeImage(dir.name, file));
+      albums.push({ name: dir.name, count: files.length, cover: images[0], images });
     }
   }
   return albums;

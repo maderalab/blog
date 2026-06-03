@@ -37,8 +37,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
-      - name: Generate content.json
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate content.json + thumbnails
         run: node build.mjs
 
       - name: Configure Pages

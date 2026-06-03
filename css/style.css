@@ -36,7 +36,9 @@ body {
 .block { margin-bottom: 3rem; }
 
 /* ---------- Card grids ---------- */
-.grid { display: grid; gap: 1.6rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+/* Fixed-width cards, centered — fits up to 3 across on a wide screen and
+   shrinks to 2 / 1 as the viewport narrows; partial rows stay centered. */
+.grid { display: grid; gap: 1.6rem; justify-content: center; grid-template-columns: repeat(auto-fit, 280px); }
 
 .card {
   display: block;
@@ -58,6 +60,7 @@ body {
 .card-body { padding: 1.1rem 1.2rem 1.3rem; }
 .card-title { font-size: 1.15rem; font-weight: 500; margin: 0 0 0.4rem; }
 .card-meta { color: var(--ink-soft); font-size: 0.9rem; }
+.meta-icon { width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin-right: 0.4em; opacity: 0.7; }
 
 /* Collection / album list */
 .collection { margin-bottom: 3.2rem; }
@@ -76,8 +79,15 @@ body {
 .post-list .p-date { color: var(--ink-soft); font-size: 0.86rem; font-family: var(--serif-en); white-space: nowrap; }
 
 /* ---------- Article view ---------- */
-.back-link { display: inline-block; color: var(--ink-soft); text-decoration: none; margin-bottom: 1.6rem; letter-spacing: 0.08em; }
-.back-link:hover { color: var(--accent); }
+.back-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.6rem; height: 2.6rem; margin-bottom: 1.6rem;
+  border: 1px solid var(--line); border-radius: 50%;
+  color: var(--ink-soft); text-decoration: none; font-size: 1.3rem; line-height: 1;
+  background: var(--paper-deep);
+  transition: color 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.back-link:hover { color: var(--accent); border-color: var(--accent-soft); transform: translateX(-2px); box-shadow: 0 6px 16px var(--shadow); }
 
 .article { max-width: 720px; margin: 0 auto; }
 .article-header { text-align: center; margin-bottom: 2.6rem; padding-bottom: 1.6rem; border-bottom: 1px solid var(--line); }
@@ -140,6 +150,8 @@ body {
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
   .app { padding-top: 2rem; }
+  /* Phones: always exactly two columns, filling the width. */
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
   .gallery { columns: 2 140px; }
   .article-header h1 { font-size: 1.7rem; }
 }

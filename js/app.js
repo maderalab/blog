@@ -1,12 +1,23 @@
 // 拾光集 — a small hash-routed SPA.
-//   #/            home: collections + albums
-//   #/articles    all article collections
-//   #/albums      all photo albums
+//   #/                              home: collection + album cards
+//   #/collection/<collection>       an article collection's list
 //   #/article/<collection>/<slug>   the markdown viewer
 //   #/album/<album>                 the picture viewer
 
 const app = document.getElementById("app");
 let MANIFEST = null;
+
+// Language-neutral count labels: a small inline icon + the number.
+const ICON = {
+  article:
+    '<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
+  photo:
+    '<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-7 7"/></svg>',
+};
+const countLabel = (type, n) => `${ICON[type]}${n}`;
+
+// Encode each segment of a root-relative path (filenames may be non-ASCII).
+const encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
 
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -35,13 +46,13 @@ function coverHtml(src, name) {
 function renderHome(m) {
   const collections = m.collections
     .map((c) => {
-      const cover = c.cover ? `docs/${encodeURIComponent(c.name)}/${encodeURIComponent(c.cover)}` : null;
+      const cover = c.cover ? encodePath(c.cover.thumb) : null;
       return `
       <a class="card" href="#/collection/${encodeURIComponent(c.name)}">
         ${coverHtml(cover, c.name)}
         <div class="card-body">
           <h3 class="card-title">${esc(c.name)}</h3>
-          <p class="card-meta">${c.count} 篇</p>
+          <p class="card-meta">${countLabel("article", c.count)}</p>
         </div>
       </a>`;
     })
@@ -51,10 +62,10 @@ function renderHome(m) {
     .map(
       (a) => `
       <a class="card" href="#/album/${encodeURIComponent(a.name)}">
-        ${coverHtml(`docs/${encodeURIComponent(a.name)}/${encodeURIComponent(a.cover)}`, a.name)}
+        ${coverHtml(encodePath(a.cover.thumb), a.name)}
         <div class="card-body">
           <h3 class="card-title">${esc(a.name)}</h3>
-          <p class="card-meta">${a.count} 张影像</p>
+          <p class="card-meta">${countLabel("photo", a.count)}</p>
         </div>
       </a>`
     )
@@ -74,9 +85,9 @@ function renderCollection(m, name) {
     return;
   }
   app.innerHTML = `
-    <a class="back-link" href="#/">← 返回首页</a>
+    <a class="back-link" href="#/" aria-label="返回首页">←</a>
     <div class="collection">
-      <div class="collection-head"><h3>${esc(c.name)}</h3><span class="count">${c.count} 篇</span></div>
+      <div class="collection-head"><h3>${esc(c.name)}</h3><span class="count">${countLabel("article", c.count)}</span></div>
       <ul class="post-list">
         ${c.articles
           .map(
@@ -106,18 +117,18 @@ async function renderArticle(m, collName, slug) {
   let raw = await res.text();
   raw = raw.replace(/^---\n[\s\S]*?\n---\n?/, ""); // strip frontmatter
 
-  // Resolve relative image paths against the article's folder.
-  marked.use({
-    walkTokens(token) {
-      if (token.type === "image" && token.href && !/^(https?:|\/|docs\/)/.test(token.href)) {
-        token.href = `docs/${encodeURIComponent(collName)}/${token.href.replace(/^\.\//, "")}`;
-      }
-    },
-  });
+  // Resolve relative ![](image) paths against the article's folder, before
+  // parsing. (Done as a string pass so we never mutate marked's global state.)
+  const resolveImg = (href) => {
+    if (!href || /^(https?:|\/|data:|docs\/)/i.test(href)) return href;
+    const rel = href.replace(/^\.\//, "").split("/").map(encodeURIComponent).join("/");
+    return `docs/${encodeURIComponent(collName)}/${rel}`;
+  };
+  raw = raw.replace(/(!\[[^\]]*\]\(\s*)([^)\s]+)/g, (_, pre, href) => pre + resolveImg(href));
 
   app.innerHTML = `
     <article class="article">
-      <a class="back-link" href="#/collection/${encodeURIComponent(collName)}">← 返回${esc(collName)}</a>
+      <a class="back-link" href="#/collection/${encodeURIComponent(collName)}" aria-label="返回${esc(collName)}">←</a>
       <header class="article-header">
         <h1>${esc(art.title)}</h1>
         <p class="meta">${esc(collName)} · ${esc(art.date)}</p>
@@ -132,18 +143,17 @@ function renderAlbum(m, albumName) {
     app.innerHTML = `<p class="error">找不到这个相册。</p>`;
     return;
   }
-  const base = `docs/${encodeURIComponent(albumName)}/`;
   app.innerHTML = `
-    <a class="back-link" href="#/albums">← 返回相册</a>
-    <header class="album-header"><h1>${esc(albumName)}</h1><p class="meta">${album.count} 张影像</p></header>
+    <a class="back-link" href="#/" aria-label="返回首页">←</a>
+    <header class="album-header"><h1>${esc(albumName)}</h1><p class="meta">${countLabel("photo", album.count)}</p></header>
     <div class="gallery">
       ${album.images
         .map(
-          (img, i) => `<figure data-index="${i}"><img loading="lazy" src="${base}${encodeURIComponent(img)}" alt="${esc(albumName)} ${i + 1}" /></figure>`
+          (img, i) => `<figure data-index="${i}"><img loading="lazy" src="${encodePath(img.thumb)}" alt="${esc(albumName)} ${i + 1}" /></figure>`
         )
         .join("")}
     </div>`;
-  setupLightbox(album.images.map((img) => base + encodeURIComponent(img)), albumName);
+  setupLightbox(album.images.map((img) => encodePath(img.full)), albumName);
 }
 
 /* ---------------- Lightbox (picture viewer) ---------------- */
@@ -207,5 +217,4 @@ async function route() {
 }
 
 window.addEventListener("hashchange", route);
-window.addEventListener("DOMContentLoaded", route);
-route();
+route(); // module scripts run after the DOM is parsed, so this is safe
