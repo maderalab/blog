@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch: # also allow manual runs from the Actions tab
 
+# Run all JavaScript actions on Node.js 24 (Node 20 is being deprecated on
+# GitHub Actions runners).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # Grant the workflow permission to publish to Pages.
 permissions:
   contents: read
@@ -31,7 +36,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Generate content.json
         run: node build.mjs
