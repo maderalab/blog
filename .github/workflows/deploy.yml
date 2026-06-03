@@ -1,0 +1,49 @@
+name: Build & Deploy to GitHub Pages
+
+# On every push to main (e.g. adding articles or images), automatically
+# run build.mjs and publish the site.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also allow manual runs from the Actions tab
+
+# Grant the workflow permission to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deploy at a time; a newer push cancels a queued older run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate content.json
+        run: node build.mjs
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: . # the whole directory is the static site
+
+      - name: Deploy to Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拾光集 · 个人博客</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main id="app" class="app">
+    <div class="loading">正在翻开书页…</div>
+  </main>
+
+  <!-- Lightbox for the picture viewer -->
+  <div id="lightbox" class="lightbox" hidden>
+    <button class="lb-close" aria-label="关闭">&times;</button>
+    <button class="lb-prev" aria-label="上一张">&#8249;</button>
+    <img class="lb-image" alt="" />
+    <button class="lb-next" aria-label="下一张">&#8250;</button>
+    <div class="lb-caption"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
