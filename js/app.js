@@ -152,8 +152,74 @@ function renderAlbum(m, albumName) {
         )
         .join("")}
     </div>`;
+  layoutGallery(album.images);
   setupLightbox(album.images.map((img) => encodePath(img.full)), albumName);
 }
+
+/* ---------------- Justified gallery layout ----------------
+   Photos are packed into rows in their natural order; each full row is then
+   scaled so its images share one height and the row fills the width exactly
+   (Google-Photos style). Sizes come from the build-time w/h, so there's no
+   reflow as lazy images load. Recomputed on resize. */
+
+// Ideal row height by viewport width — the layout is fully fluid, these just
+// keep rows well-proportioned (≈3–5 photos) at each device size.
+//   phone < 540 · tablet/iPad < 1100 · desktop ≥ 1100
+const ROW_TARGETS = [
+  { max: 540, height: 170 },
+  { max: 1100, height: 220 },
+  { max: Infinity, height: 280 },
+];
+const DEFAULT_RATIO = 3 / 2; // fallback when an image has no dimensions
+
+function rowTarget(width) {
+  return ROW_TARGETS.find((t) => width < t.max).height;
+}
+
+let galleryRatios = null; // aspect ratios of the album currently shown
+
+function layoutGallery(images) {
+  galleryRatios = images.map((img) => (img.w && img.h ? img.w / img.h : DEFAULT_RATIO));
+  applyGalleryLayout();
+}
+
+function applyGalleryLayout() {
+  const gallery = app.querySelector(".gallery");
+  if (!gallery || !galleryRatios) return;
+  const width = gallery.clientWidth;
+  if (!width) return;
+
+  const gap = parseFloat(getComputedStyle(gallery).gap) || 0;
+  const figures = [...gallery.children];
+  const target = rowTarget(width);
+  let row = [];
+  let ratioSum = 0;
+
+  const flush = (stretch) => {
+    const gaps = gap * (row.length - 1);
+    const h = stretch ? (width - gaps) / ratioSum : target;
+    for (const fig of row) {
+      fig.style.height = `${h}px`;
+      fig.style.width = `${h * galleryRatios[fig._idx]}px`;
+    }
+    row = [];
+    ratioSum = 0;
+  };
+
+  figures.forEach((fig, i) => {
+    fig._idx = i;
+    row.push(fig);
+    ratioSum += galleryRatios[i];
+    if (target * ratioSum + gap * (row.length - 1) >= width) flush(true);
+  });
+  if (row.length) flush(false); // last, partial row keeps the target height
+}
+
+let galleryResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(galleryResizeTimer);
+  galleryResizeTimer = setTimeout(applyGalleryLayout, 120);
+});
 
 /* ---------------- Lightbox (picture viewer) ---------------- */
 

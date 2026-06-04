@@ -24,24 +24,35 @@ const THUMB_DIR = "thumbs";
 const THUMB_MAX = 800;
 const NO_THUMB = new Set([".svg", ".gif"]);
 
-// Make a thumbnail for docs/<folder>/<file> and return { full, thumb } as
-// root-relative URL paths. On anything unexpected, thumb falls back to full.
+// Make a thumbnail for docs/<folder>/<file> and return { full, thumb, w, h }
+// as root-relative URL paths plus intrinsic pixel dimensions (so the gallery
+// can lay photos out justified). On anything unexpected, thumb falls back to
+// full and w/h are omitted.
 async function makeImage(folder, file) {
   const full = `docs/${folder}/${file}`;
   const ext = path.extname(file).toLowerCase();
-  if (NO_THUMB.has(ext)) return { full, thumb: full };
+  const srcPath = path.join(ROOT, "docs", folder, file);
+
+  // Probe intrinsic dimensions — works for rasters and most SVGs.
+  let dims = {};
+  try {
+    const meta = await sharp(srcPath).metadata();
+    if (meta.width && meta.height) dims = { w: meta.width, h: meta.height };
+  } catch {}
+
+  if (NO_THUMB.has(ext)) return { full, thumb: full, ...dims };
 
   const base = file.slice(0, -ext.length);
   const relThumb = `${THUMB_DIR}/${folder}/${base}.webp`;
   try {
     await mkdir(path.join(ROOT, THUMB_DIR, folder), { recursive: true });
-    await sharp(path.join(ROOT, "docs", folder, file))
+    await sharp(srcPath)
       .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 72 })
       .toFile(path.join(ROOT, relThumb));
-    return { full, thumb: relThumb };
+    return { full, thumb: relThumb, ...dims };
   } catch {
-    return { full, thumb: full };
+    return { full, thumb: full, ...dims };
   }
 }
 
