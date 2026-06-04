@@ -1,8 +1,7 @@
 // A small hash-routed SPA.
-//   #/                              home: collection + album cards
+//   #/                              home: collection cards
 //   #/collection/<collection>       an article collection's list
 //   #/article/<collection>/<slug>   the markdown viewer
-//   #/album/<album>                 the picture viewer
 
 const app = document.getElementById("app");
 let MANIFEST = null;
@@ -11,8 +10,6 @@ let MANIFEST = null;
 const ICON = {
   article:
     '<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
-  photo:
-    '<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-7 7"/></svg>',
 };
 const countLabel = (type, n) => `${ICON[type]}${n}`;
 
@@ -33,8 +30,8 @@ async function loadManifest() {
 /* ---------------- Views ---------------- */
 
 // A card cover: a real image if one exists, otherwise a colored placeholder
-// (deterministic earthy gradient derived from the name) so collections and
-// albums share the same look even when a collection has no picture.
+// (deterministic earthy gradient derived from the name) so every collection
+// has the same look even without a picture.
 function coverHtml(src, name) {
   if (src) return `<div class="card-cover"><img loading="lazy" src="${src}" alt="${esc(name)}" /></div>`;
   let h = 0;
@@ -44,7 +41,7 @@ function coverHtml(src, name) {
 }
 
 function renderHome(m) {
-  const collections = m.collections
+  const cards = m.collections
     .map((c) => {
       const cover = c.cover ? encodePath(c.cover.thumb) : null;
       return `
@@ -58,23 +55,9 @@ function renderHome(m) {
     })
     .join("");
 
-  const albums = m.albums
-    .map(
-      (a) => `
-      <a class="card" href="#/album/${encodeURIComponent(a.name)}">
-        ${coverHtml(encodePath(a.cover.thumb), a.name)}
-        <div class="card-body">
-          <h3 class="card-title">${esc(a.name)}</h3>
-          <p class="card-meta">${countLabel("photo", a.count)}</p>
-        </div>
-      </a>`
-    )
-    .join("");
-
-  const cards = collections + albums;
   app.innerHTML = cards
     ? `<section class="block"><div class="grid">${cards}</div></section>`
-    : `<p class="empty">Nothing here yet. Add a folder under docs/ to get started.</p>`;
+    : `<p class="empty">Nothing here yet. Add a folder of markdown under docs/ to get started.</p>`;
 }
 
 function renderCollection(m, name) {
@@ -136,144 +119,15 @@ async function renderArticle(m, collName, slug) {
     </article>`;
 }
 
-function renderAlbum(m, albumName) {
-  const album = m.albums.find((a) => a.name === albumName);
-  if (!album) {
-    app.innerHTML = `<p class="error">Album not found.</p>`;
-    return;
-  }
-  app.innerHTML = `
-    <a class="back-link" href="#/" aria-label="Back to home">←</a>
-    <header class="album-header"><h1>${esc(albumName)}</h1><p class="meta">${countLabel("photo", album.count)}</p></header>
-    <div class="gallery">
-      ${album.images
-        .map(
-          (img, i) => `<figure data-index="${i}"><img loading="lazy" src="${encodePath(img.thumb)}" alt="${esc(albumName)} ${i + 1}" /></figure>`
-        )
-        .join("")}
-    </div>`;
-  layoutGallery(album.images);
-  setupLightbox(album.images.map((img) => encodePath(img.full)), albumName);
-}
-
-/* ---------------- Justified gallery layout ----------------
-   Photos are packed into rows in their natural order; each full row is then
-   scaled so its images share one height and the row fills the width exactly
-   (Google-Photos style). Sizes come from the build-time w/h, so there's no
-   reflow as lazy images load. Recomputed on resize. */
-
-// Ideal row height by viewport width — the layout is fully fluid, these just
-// keep rows well-proportioned (≈3–5 photos) at each device size.
-//   phone < 540 · tablet/iPad < 1100 · desktop ≥ 1100
-const ROW_TARGETS = [
-  { max: 540, height: 170 },
-  { max: 1100, height: 220 },
-  { max: Infinity, height: 280 },
-];
-const DEFAULT_RATIO = 3 / 2; // fallback when an image has no dimensions
-
-function rowTarget(width) {
-  return ROW_TARGETS.find((t) => width < t.max).height;
-}
-
-let galleryRatios = null; // aspect ratios of the album currently shown
-
-function layoutGallery(images) {
-  galleryRatios = images.map((img) => (img.w && img.h ? img.w / img.h : DEFAULT_RATIO));
-  applyGalleryLayout();
-}
-
-function applyGalleryLayout() {
-  const gallery = app.querySelector(".gallery");
-  if (!gallery || !galleryRatios) return;
-  const width = gallery.clientWidth;
-  if (!width) return;
-
-  const gap = parseFloat(getComputedStyle(gallery).gap) || 0;
-  const figures = [...gallery.children];
-  const target = rowTarget(width);
-  let row = [];
-  let ratioSum = 0;
-
-  const flush = (stretch) => {
-    const gaps = gap * (row.length - 1);
-    const h = stretch ? (width - gaps) / ratioSum : target;
-    for (const fig of row) {
-      fig.style.height = `${h}px`;
-      fig.style.width = `${h * galleryRatios[fig._idx]}px`;
-    }
-    row = [];
-    ratioSum = 0;
-  };
-
-  figures.forEach((fig, i) => {
-    fig._idx = i;
-    row.push(fig);
-    ratioSum += galleryRatios[i];
-    if (target * ratioSum + gap * (row.length - 1) >= width) flush(true);
-  });
-  if (row.length) flush(false); // last, partial row keeps the target height
-}
-
-let galleryResizeTimer = null;
-window.addEventListener("resize", () => {
-  clearTimeout(galleryResizeTimer);
-  galleryResizeTimer = setTimeout(applyGalleryLayout, 120);
-});
-
-/* ---------------- Lightbox (picture viewer) ---------------- */
-
-const lb = document.getElementById("lightbox");
-const lbImg = lb.querySelector(".lb-image");
-const lbCaption = lb.querySelector(".lb-caption");
-let lbList = [];
-let lbIndex = 0;
-
-function setupLightbox(list, caption) {
-  lbList = list;
-  document.querySelectorAll(".gallery figure").forEach((fig) => {
-    fig.addEventListener("click", () => openLightbox(Number(fig.dataset.index), caption));
-  });
-}
-function openLightbox(i, caption) {
-  lbIndex = i;
-  lbImg.src = lbList[i];
-  lbCaption.textContent = `${caption} · ${i + 1} / ${lbList.length}`;
-  lb.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-function closeLightbox() {
-  lb.hidden = true;
-  document.body.style.overflow = "";
-}
-function step(dir) {
-  if (!lbList.length) return;
-  lbIndex = (lbIndex + dir + lbList.length) % lbList.length;
-  lbImg.src = lbList[lbIndex];
-  lbCaption.textContent = lbCaption.textContent.replace(/\d+ \/ \d+$/, `${lbIndex + 1} / ${lbList.length}`);
-}
-lb.querySelector(".lb-close").addEventListener("click", closeLightbox);
-lb.querySelector(".lb-prev").addEventListener("click", () => step(-1));
-lb.querySelector(".lb-next").addEventListener("click", () => step(1));
-lb.addEventListener("click", (e) => { if (e.target === lb) closeLightbox(); });
-document.addEventListener("keydown", (e) => {
-  if (lb.hidden) return;
-  if (e.key === "Escape") closeLightbox();
-  if (e.key === "ArrowLeft") step(-1);
-  if (e.key === "ArrowRight") step(1);
-});
-
 /* ---------------- Router ---------------- */
 
 async function route() {
-  closeLightbox();
   const hash = location.hash.replace(/^#\/?/, "");
   const parts = hash.split("/").filter(Boolean).map(decodeURIComponent);
   try {
     const m = await loadManifest();
     if (parts[0] === "collection" && parts.length >= 2) renderCollection(m, parts[1]);
     else if (parts[0] === "article" && parts.length >= 3) await renderArticle(m, parts[1], parts[2]);
-    else if (parts[0] === "album" && parts.length >= 2) renderAlbum(m, parts[1]);
     else renderHome(m);
     window.scrollTo({ top: 0 });
   } catch (err) {

@@ -2,12 +2,10 @@
 // Scans docs/ and writes content.json — the manifest the front-end reads
 // (browsers can't list directories on their own).
 //
-// Every sub-folder of docs/ is classified by what's inside it:
-//   contains .md files   -> an article collection
-//   only images, no .md  -> a photo album
-//
+// Every sub-folder of docs/ that holds .md files is an article collection:
 //   docs/<collection>/<article>.md   -> an article inside a collection
-//   docs/<album>/<image>.jpg         -> a photo inside an album
+// An optional cover.* (or a frontmatter `cover:` / first inline image) gives
+// the collection card a picture.
 //
 // Run it whenever you add or rename content:  node build.mjs
 
@@ -24,35 +22,24 @@ const THUMB_DIR = "thumbs";
 const THUMB_MAX = 800;
 const NO_THUMB = new Set([".svg", ".gif"]);
 
-// Make a thumbnail for docs/<folder>/<file> and return { full, thumb, w, h }
-// as root-relative URL paths plus intrinsic pixel dimensions (so the gallery
-// can lay photos out justified). On anything unexpected, thumb falls back to
-// full and w/h are omitted.
+// Make a thumbnail for docs/<folder>/<file> and return { full, thumb } as
+// root-relative URL paths. On anything unexpected, thumb falls back to full.
 async function makeImage(folder, file) {
   const full = `docs/${folder}/${file}`;
   const ext = path.extname(file).toLowerCase();
-  const srcPath = path.join(ROOT, "docs", folder, file);
-
-  // Probe intrinsic dimensions — works for rasters and most SVGs.
-  let dims = {};
-  try {
-    const meta = await sharp(srcPath).metadata();
-    if (meta.width && meta.height) dims = { w: meta.width, h: meta.height };
-  } catch {}
-
-  if (NO_THUMB.has(ext)) return { full, thumb: full, ...dims };
+  if (NO_THUMB.has(ext)) return { full, thumb: full };
 
   const base = file.slice(0, -ext.length);
   const relThumb = `${THUMB_DIR}/${folder}/${base}.webp`;
   try {
     await mkdir(path.join(ROOT, THUMB_DIR, folder), { recursive: true });
-    await sharp(srcPath)
+    await sharp(path.join(ROOT, "docs", folder, file))
       .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 72 })
       .toFile(path.join(ROOT, relThumb));
-    return { full, thumb: relThumb, ...dims };
+    return { full, thumb: relThumb };
   } catch {
-    return { full, thumb: full, ...dims };
+    return { full, thumb: full };
   }
 }
 
@@ -159,34 +146,14 @@ async function buildArticles() {
   return collections;
 }
 
-async function buildAlbums() {
-  const albums = [];
-  for (const dir of await listDirs(path.join(ROOT, "docs"))) {
-    const albumPath = path.join(ROOT, "docs", dir.name);
-    // A folder with any markdown is a collection, not an album — skip it here.
-    const hasMarkdown = (await listFiles(albumPath, (n) => n.toLowerCase().endsWith(".md"))).length > 0;
-    if (hasMarkdown) continue;
-    const files = (await listFiles(albumPath, (n) => IMG_EXT.has(path.extname(n).toLowerCase()))).sort();
-    if (files.length) {
-      const images = [];
-      for (const file of files) images.push(await makeImage(dir.name, file));
-      albums.push({ name: dir.name, count: files.length, cover: images[0], images });
-    }
-  }
-  return albums;
-}
-
 const manifest = {
   generatedAt: new Date().toISOString(),
   collections: await buildArticles(),
-  albums: await buildAlbums(),
 };
 
 await writeFile(path.join(ROOT, "content.json"), JSON.stringify(manifest, null, 2) + "\n");
 
 const nArt = manifest.collections.reduce((s, c) => s + c.count, 0);
-const nPic = manifest.albums.reduce((s, a) => s + a.count, 0);
 console.log(
-  `content.json written — ${manifest.collections.length} collections / ${nArt} articles, ` +
-    `${manifest.albums.length} albums / ${nPic} images`
+  `content.json written — ${manifest.collections.length} collections / ${nArt} articles`
 );
